@@ -18,5 +18,8 @@ Gem::Specification.new do |spec|
   spec.require_paths = ["lib"]
   spec.license       = "MIT"
 
+  spec.add_dependency "spreadsheet", "~> 1.0"
+
   spec.add_development_dependency "rake", "~> 10.0"
+  spec.add_development_dependency "rspec", "3.2.0"
 end
