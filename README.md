@@ -23,7 +23,19 @@ Or install it yourself as:
 
 ## Usage
 
-TODO: Write usage instructions here
+For now, the gem supports 6 types of information: State (without abbreviation yet), Meso region, Micro region, Municipality, District and Sub district.
+
+To read any type, the readers has the same API like below:
+
+```ruby
+  # For state
+  Ibge::Reader::State.read #=> [{ code: '11', state_name: 'Rondônia' }, ... { code: '53', state_name: 'Distrito Federal' }]
+
+  # For municipality
+  Ibge::Reader::Municipality.read #=> [{:state_code=>"11", :meso_region_code=>"01", :micro_region_code=>"001", :code=>"00205", :full_code=>"1100205", :name=>"Porto Velho"},
+                                       ...,
+                                       {:state_code=>"53", :meso_region_code=>"01", :micro_region_code=>"001", :code=>"00108", :full_code=>"5300108", :name=>"Brasília"}]
+```
 
 ## Maintainer
 
