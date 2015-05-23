@@ -33,8 +33,8 @@ To read any type, the readers has the same API like below:
 
   # For municipality
   Ibge::Reader::Municipality.read #=> [{:state_code=>"11", :meso_region_code=>"01", :micro_region_code=>"001", :code=>"00205", :full_code=>"1100205", :name=>"Porto Velho"},
-                                       ...,
-                                       {:state_code=>"53", :meso_region_code=>"01", :micro_region_code=>"001", :code=>"00108", :full_code=>"5300108", :name=>"Brasília"}]
+                                  #    ...,
+                                  #    {:state_code=>"53", :meso_region_code=>"01", :micro_region_code=>"001", :code=>"00108", :full_code=>"5300108", :name=>"Brasília"}]
 ```
 
 ## Maintainer
