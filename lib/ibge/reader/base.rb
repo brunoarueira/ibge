@@ -4,10 +4,27 @@ module Ibge
   module Reader
     class Base
       class << self
-        attr_reader :defined_columns
+        SOURCES = {
+          dtb: 'DTB_2014_subdistrito.xls',
+          sidra: 'sidra.xls'
+        }
+
+        attr_reader :defined_columns, :selected_source
 
         def columns(columns = {})
           @defined_columns = columns
+        end
+
+        def source(selected_source = :dtb)
+          unless SOURCES.keys.include?(selected_source)
+            raise ArgumentError, "Source must be one of those '#{SOURCES.keys.flatten.join(', ')}'"
+          end
+
+          @selected_source = selected_source
+        end
+
+        def sources
+          SOURCES
         end
       end
 
@@ -32,7 +49,7 @@ module Ibge
       protected
 
       def default_filename
-        File.join DATA_PATH, 'DTB_2014_subdistrito.xls'
+        File.join DATA_PATH, sources[selected_source]
       end
 
       def spreadsheet
@@ -47,8 +64,20 @@ module Ibge
         @rows ||= sheet.rows
       end
 
+      def selected_source
+        self.class.selected_source || :dtb
+      end
+
+      def sources
+        self.class.sources
+      end
+
+      def defined_columns
+        self.class.defined_columns
+      end
+
       def column_keys
-        self.class.defined_columns.keys.map(&:to_s).map(&:to_i)
+        defined_columns.keys.map(&:to_s).map(&:to_i)
       end
 
       def column_range
