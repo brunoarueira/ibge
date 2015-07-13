@@ -13,5 +13,6 @@ module Ibge
     autoload :Municipality, 'ibge/reader/municipality'
     autoload :District,     'ibge/reader/district'
     autoload :SubDistrict,  'ibge/reader/sub_district'
+    autoload :Neighborhood, 'ibge/reader/neighborhood'
   end
 end
