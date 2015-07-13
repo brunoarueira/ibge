@@ -2,6 +2,8 @@ require 'spec_helper'
 
 describe Ibge::Reader::Base do
   class Reader < Ibge::Reader::Base
+    source :sidra
+
     columns "0": :code
   end
 
@@ -31,9 +33,15 @@ describe Ibge::Reader::Base do
     end
   end
 
+  describe '.selected_source' do
+    it 'show the default file source to read' do
+      expect(subject.selected_source).to eq :sidra
+    end
+  end
+
   describe '#filename' do
     it 'sets the default to file inside data folder' do
-      expect(subject.new.filename).to include 'data/DTB_2014_subdistrito.xls'
+      expect(subject.new.filename).to include 'data/sidra.xls'
     end
   end
 end
