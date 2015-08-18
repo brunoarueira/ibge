@@ -3,30 +3,7 @@ require 'spreadsheet'
 module Ibge
   module Reader
     class Base
-      class << self
-        SOURCES = {
-          dtb: 'DTB_2014_subdistrito.xls',
-          sidra: 'sidra.xls'
-        }
-
-        attr_reader :defined_columns, :selected_source
-
-        def columns(columns = {})
-          @defined_columns = columns
-        end
-
-        def source(selected_source = :dtb)
-          unless SOURCES.keys.include?(selected_source)
-            raise ArgumentError, "Source must be one of those '#{SOURCES.keys.flatten.join(', ')}'"
-          end
-
-          @selected_source = selected_source
-        end
-
-        def sources
-          SOURCES
-        end
-      end
+      extend Ibge::Reader::Helpers
 
       attr_reader :filename
 
@@ -35,37 +12,102 @@ module Ibge
       end
 
       def initialize(options = {})
-        @filename = options.fetch(:filename, default_filename)
+        @spreadsheet = {}
+        @rows = {}
+        @selected_sheet = {}
+
+        self.selected_source = self.class.selected_source
+
+        unless options.fetch(:filename, nil).nil?
+          filename = options.fetch(:filename)
+
+          if filename.is_a?(Hash)
+            sources_filename = options.fetch(:filename).keys
+
+            sources_filename.each do |source_filename|
+              self.class.valid_informed_source(source_filename)
+            end
+          else
+            raise ArgumentError,
+                  "Filename must be a hash with the source as key"
+          end
+        end
+
+        default_filename = default_filename_to(selected_source)
+
+        @filename = options.fetch(:filename, "#{DATA_PATH}/#{default_filename}")
       end
 
       def read
-        transformed_rows = rows[1..-1].map do |row|
-          transform(row.compact.values_at(*column_range), column_range)
+        transformed_rows = []
+        previous_column_range = nil
+
+        if multiple_sources?
+          loaded_sources = defined_columns.keys.sort
+
+          loaded_sources.each do |loaded_source|
+            self.selected_source = loaded_source
+            @filename = default_filename_to(loaded_source)
+
+            if transformed_rows == []
+              transformed_rows = rows[1..-1].map do |row|
+                transform(row.compact.values_at(*column_range), column_range)
+              end
+
+              transformed_rows = transformed_rows.uniq
+
+              previous_column_range = column_range
+            else
+              transformed_rows.each do |transformed_row|
+                selected_rows = rows[1..-1].select do |r|
+                  r[previous_column_range.first] == transformed_row.values.first
+                end
+
+                new_row = selected_rows.compact.uniq { |r| r[0] }.map do |row|
+                  transform(row.compact.values_at(*column_range), column_range)
+                end
+
+                if new_row.empty?
+                  columns = self.class.defined_columns[selected_source]
+
+                  columns.each do |column|
+                    new_row << { column[1] => "" }
+                  end
+                end
+
+                transformed_row.merge!(*new_row)
+              end
+            end
+          end
+        else
+          transformed_rows = rows[1..-1].map do |row|
+            transform(row.compact.values_at(*column_range), column_range)
+          end
         end
 
-        transformed_rows.uniq.sort_by { |hash| data_sort(hash) }
+        transformed_rows.uniq.sort_by { |h| data_sort(h) }
       end
 
       protected
 
-      def default_filename
-        File.join DATA_PATH, sources[selected_source]
+      attr_accessor :selected_source
+
+      def default_filename_to(source)
+        sources[source.to_sym]
       end
 
       def spreadsheet
-        @spreadsheet ||= Spreadsheet.open filename
+        filename = File.join(DATA_PATH, default_filename_to(selected_source))
+
+        @spreadsheet[selected_source] ||= Spreadsheet.open filename
       end
 
       def sheet
-        @selected_sheet ||= spreadsheet.worksheets.first
+        @selected_sheet[selected_source] ||= spreadsheet.worksheets.first
       end
 
       def rows
-        @rows ||= sheet.rows
-      end
-
-      def selected_source
-        self.class.selected_source || :dtb
+        @rows[selected_source] ||= sheet.rows
       end
 
       def sources
@@ -77,7 +119,7 @@ module Ibge
       end
 
       def column_keys
-        defined_columns.keys.map(&:to_s).map(&:to_i)
+        defined_columns[selected_source].keys.map(&:to_s).map(&:to_i)
       end
 
       def column_range
@@ -86,9 +128,13 @@ module Ibge
 
       def transform(row, column_range)
         row.each_with_index.inject({}) do |item, (raw_data, index)|
-          column_index = column_range[index]
+          column_index = column_range[index].to_s.to_sym
 
-          item.merge!(self.class.defined_columns[column_index.to_s.to_sym] => raw_data)
+          hash = {
+            defined_columns[selected_source][column_index] => raw_data
+          }
+
+          item.merge!(hash)
         end
       end
 
@@ -101,6 +147,10 @@ module Ibge
         end
 
         order_values
+      end
+
+      def multiple_sources?
+        defined_columns.keys.size > 1
       end
     end
   end
