@@ -3,7 +3,7 @@ require 'spreadsheet'
 module Ibge
   module Reader
     class Base
-      extend Ibge::Reader::Helpers
+      include Ibge::Reader::Helpers
 
       attr_reader :filename
 
@@ -15,17 +15,18 @@ module Ibge
         @spreadsheet = {}
         @rows = {}
         @selected_sheet = {}
+        @all_rows = {}
 
         self.selected_source = self.class.selected_source
 
-        unless options.fetch(:filename, nil).nil?
-          filename = options.fetch(:filename)
+        filename = options.fetch(:filename, nil)
 
+        unless filename.nil?
           if filename.is_a?(Hash)
             sources_filename = options.fetch(:filename).keys
 
             sources_filename.each do |source_filename|
-              self.class.valid_informed_source(source_filename)
+              self.class.informed_source_is_valid?(source_filename)
             end
           else
             raise ArgumentError,
@@ -39,62 +40,20 @@ module Ibge
       end
 
       def read
-        transformed_rows = []
-        previous_column_range = nil
+        rows = []
 
         if multiple_sources?
-          loaded_sources = defined_columns.keys.sort
-
-          loaded_sources.each do |loaded_source|
-            self.selected_source = loaded_source
-            @filename = default_filename_to(loaded_source)
-
-            if transformed_rows == []
-              transformed_rows = rows[1..-1].map do |row|
-                transform(row.compact.values_at(*column_range), column_range)
-              end
-
-              transformed_rows = transformed_rows.uniq
-
-              previous_column_range = column_range
-            else
-              transformed_rows.each do |transformed_row|
-                selected_rows = rows[1..-1].select do |r|
-                  r[previous_column_range.first] == transformed_row.values.first
-                end
-
-                new_row = selected_rows.compact.uniq { |r| r[0] }.map do |row|
-                  transform(row.compact.values_at(*column_range), column_range)
-                end
-
-                if new_row.empty?
-                  columns = self.class.defined_columns[selected_source]
-
-                  columns.each do |column|
-                    new_row << { column[1] => "" }
-                  end
-                end
-
-                transformed_row.merge!(*new_row)
-              end
-            end
-          end
+          rows = read_from_multiple_sources
         else
-          transformed_rows = rows[1..-1].map do |row|
-            transform(row.compact.values_at(*column_range), column_range)
-          end
+          rows = transformed_rows
         end
 
-        transformed_rows.uniq.sort_by { |h| data_sort(h) }
+        rows.sort_by { |h| data_sort(h) }
       end
 
       protected
 
       attr_accessor :selected_source
-
-      def default_filename_to(source)
-        sources[source.to_sym]
-      end
 
       def spreadsheet
         filename = File.join(DATA_PATH, default_filename_to(selected_source))
@@ -110,23 +69,13 @@ module Ibge
         @rows[selected_source] ||= sheet.rows
       end
 
-      def sources
-        self.class.sources
+      def all_rows
+        @all_rows[selected_source] ||= rows[1..-1]
       end
 
-      def defined_columns
-        self.class.defined_columns
-      end
+      def transform(original_row, column_range)
+        row = original_row.compact.values_at(*column_range)
 
-      def column_keys
-        defined_columns[selected_source].keys.map(&:to_s).map(&:to_i)
-      end
-
-      def column_range
-        column_keys.compact.sort.uniq
-      end
-
-      def transform(row, column_range)
         row.each_with_index.inject({}) do |item, (raw_data, index)|
           column_index = column_range[index].to_s.to_sym
 
@@ -138,19 +87,65 @@ module Ibge
         end
       end
 
-      def data_sort(hash)
-        keys = hash.keys
-        order_values = []
+      def read_from_multiple_sources
+        rows = []
+        previous_column = nil
+        loaded_sources = defined_columns.keys.sort
 
-        (keys.length - 1).times.each do |index|
-          order_values << hash[keys[index]]
+        loaded_sources.each do |loaded_source|
+          self.selected_source = loaded_source
+
+          if rows.empty?
+            rows = transformed_rows
+
+            previous_column = column_range.first
+          else
+            rows.each do |transformed_row|
+              new_row = handle_new_row(transformed_row.values, previous_column)
+
+              transformed_row.merge!(*new_row)
+            end
+          end
         end
 
-        order_values
+        rows
       end
 
-      def multiple_sources?
-        defined_columns.keys.size > 1
+      def transformed_rows
+        unless @transformed_rows
+          transformed_rows = all_rows.map do |row|
+            transform(row, column_range)
+          end
+
+          @transformed_rows ||= transformed_rows.uniq
+        end
+
+        @transformed_rows
+      end
+
+      def handle_new_row(transformed_row_values, previous_column)
+        first_row = transformed_row_values.first
+
+        selected_rows = filter_rows(first_row, previous_column)
+        selected_rows = selected_rows.compact.uniq { |r| r[0] }
+
+        new_row = selected_rows.map do |row|
+          transform(row, column_range)
+        end
+
+        if new_row.empty?
+          columns = defined_columns[selected_source]
+
+          columns.each do |column|
+            new_row << { column[1] => "" }
+          end
+        end
+
+        new_row
+      end
+
+      def filter_rows(value, column)
+        all_rows.select { |r| r[column] == value }
       end
     end
   end
